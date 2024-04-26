@@ -50,6 +50,7 @@
     -- specific configurable that is used to avoid creating an expensive intermediate table.
     -- Insert+replace strategy does not require unique_key => is an exception.
     {% call statement('main') %}
+        {{ log("Strategy was not selected.") }}
         {{ clickhouse__insert_into(target_relation, sql) }}
     {% endcall %}
 
@@ -77,6 +78,7 @@
         {{ clickhouse__insert_into(target_relation, sql) }}
       {% endcall %}
     {% elif incremental_strategy == 'insert_replace' %}#}
+      {{ log('Selected ' + incremental_strategy + ' strategy') }}
       {%- set partition_by = config.get('partition_by') -%}
       {% if partition_by is none or partition_by|length == 0 %}
         {% do exceptions.raise_compiler_error(incremental_strategy + ' strategy requires nonempty partition_by. Current partition_by is ' ~ partition_by) %}
@@ -259,12 +261,15 @@
        + '__dbt_new_data_' + invocation_id.replace('-', '_')}) %}
     {{ drop_relation_if_exists(new_data_relation) }}
     {% call statement('create_new_data_temp') -%}
+      {{ log("get_create_table_as_sql macros was called") }}
       {{ get_create_table_as_sql(False, new_data_relation, sql) }}
     {%- endcall %}
     {% call statement('main') -%}
-        create table {{ intermediate_relation }} as {{ existing_relation }}
+        {{ log("main statement was called") }}
+        create table {{ intermediate_relation }} {{ on_cluster_clause(intermediate_relation)}} as {{ existing_relation }}
     {%- endcall %}
     {% call statement('insert_new_data') -%}
+        {{ log("insert into intermediate_relation relation") }}
         insert into {{ intermediate_relation }} select * from {{ new_data_relation }}
     {%- endcall %}
     {% if execute %}
